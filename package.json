@@ -12,8 +12,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/app/document-loader.js",
-    "dev": "tsc && node dist/app/document-loader.js",
+    "start": "node dist/app/index.js",
+    "dev": "tsc && node dist/app/index.js",
     "watch": "tsc --watch"
   },
   "type": "module"
