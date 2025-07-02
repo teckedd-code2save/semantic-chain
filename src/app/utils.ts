@@ -15,6 +15,7 @@ import { MistralAIEmbeddings } from "@langchain/mistralai";
 
 // In Memory vector store
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
+import { VectorStoreRetriever } from '@langchain/core/vectorstores';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -159,16 +160,94 @@ class CustomPDFProcessor {
     return await this.vectorStore.similaritySearch(query, k);
   }
 
-  // Batch search with multiple queries
-  async batchSearch(queries: string[], k: number = 2): Promise<Record<string, Document[]>> {
-    const results: Record<string, Document[]> = {};
-    
-    for (const query of queries) {
-      results[query] = await this.search(query, k);
-    }
-    
-    return results;
+  async batchSearchAdvanced(
+  queries: string[], 
+  options: {
+    k?: number;
+    strategy?: 'similarity' | 'mmr' | 'threshold';
+    mmrLambda?: number;
+    scoreThreshold?: number;
+    fetchK?: number;
+  } = {}
+): Promise<{
+  results: Record<string, Document[]>;
+  metadata: {
+    strategy: string;
+    totalQueries: number;
+    totalResults: number;
+    processingTime: number;
   }
+}> {
+  if (!this.vectorStore) {
+    throw new Error('Vector store not initialized. Call processDocuments() first.');
+  }
+
+  const startTime = Date.now();
+  const {
+    k = 2,
+    strategy = 'mmr',
+    mmrLambda = 0.7,
+    fetchK = k * 2
+  } = options;
+
+  const results: Record<string, Document[]> = {};
+  let retriever: VectorStoreRetriever;
+
+  // Configure retriever based on strategy
+  switch (strategy) {
+    case 'similarity':
+      retriever = this.vectorStore.asRetriever({
+        searchType: "similarity",
+        k: k
+      });
+      break;
+      
+    case 'mmr':
+      retriever = this.vectorStore.asRetriever({
+        searchType: "mmr",
+        searchKwargs: {
+          fetchK: fetchK,
+          lambda: mmrLambda
+        }
+      });
+      break;
+      
+      
+    default:
+      throw new Error(`Unknown strategy: ${strategy}`);
+  }
+
+  try {
+    console.log(`🚀 Running batch search with ${strategy} strategy...`);
+    
+    const batchResults = await retriever.batch(queries);
+    
+    // Process results
+    let totalResults = 0;
+    queries.forEach((query, index) => {
+      results[query] = batchResults[index] || [];
+      totalResults += results[query].length;
+      
+      console.log(`📋 "${query}": ${results[query].length} results`);
+    });
+
+    const processingTime = Date.now() - startTime;
+    
+    return {
+      results,
+      metadata: {
+        strategy,
+        totalQueries: queries.length,
+        totalResults,
+        processingTime
+      }
+    };
+    
+  } catch (error) {
+    console.error(`❌ Advanced batch search failed with ${strategy}:`, error);
+    throw error;
+  }
+}
 
   // Search using predefined templates
   async searchByTemplate(category: keyof typeof queryTemplates, type: string, replacements: Record<string, string> = {}): Promise<Document[]> {
@@ -186,7 +265,7 @@ class CustomPDFProcessor {
     return await this.search(query);
   }
 
-  async  processQueriesWithDetailedLogging(queries:string[]) {
+  async  processEmbeddedQueriesWithDetailedLogging(queries:string[]) {
     console.log('🔄 Starting query processing with embeddings...');
     const startTime = Date.now();
     
@@ -205,9 +284,9 @@ class CustomPDFProcessor {
             const query = queries[i];
             const embedding = embeddings[i];
             
-            console.log(`\n${'🔍'.repeat(20)}`);
+            console.log(`\n${'🔍'.repeat(5)}`);
             console.log(`Query ${i + 1}/${queries.length}: "${query}"`);
-            console.log(`${'📄'.repeat(20)}`);
+            console.log(`${'📄'.repeat(5)}`);
             
             const queryStartTime = Date.now();
             const searchResults = await this.searchWithVectorsWithScore(embedding);
@@ -225,7 +304,7 @@ class CustomPDFProcessor {
             searchResults.slice(0, 3).forEach((result, resultIndex) => {
                 console.log(`\n📄 Result ${resultIndex + 1}:`);
                 console.log(`   📊 Score: ${result[1].toFixed(4)}`);
-                console.log(`   📝 Preview: ${result[0].pageContent.substring(0, 120)}...`);
+                console.log(`   📝 Preview: ${result[0].pageContent.substring(0, 300)}...`);
                 if (result[0].metadata?.source) {
                     console.log(`   📚 Source: ${result[0].metadata.source}`);
                 }
@@ -241,9 +320,9 @@ class CustomPDFProcessor {
         
         // Summary statistics
         const totalTime = Date.now() - startTime;
-        console.log(`\n${'📊'.repeat(20)}`);
+        console.log(`\n${'📊'.repeat(5)}`);
         console.log('PROCESSING SUMMARY');
-        console.log(`${'📊'.repeat(20)}`);
+        console.log(`${'📊'.repeat(5)}`);
         console.log(`⏱️  Total processing time: ${totalTime}ms`);
         console.log(`📈 Average results per query: ${(allResults.reduce((sum, r) => sum + r.resultCount, 0) / allResults.length).toFixed(1)}`);
         console.log(`🎯 Average best score: ${(allResults.reduce((sum, r) => sum + r.bestScore, 0) / allResults.length).toFixed(4)}`);
@@ -271,74 +350,7 @@ class CustomPDFProcessor {
   }
 }
 
-// Usage examples
-async function runExamples() {
-  try {
-    // Initialize processor with custom config
-    const processor = new CustomPDFProcessor({
-      pdfFileName: 'EdwardProffesionalExperience.pdf',
-      chunkSize: 800,
-      chunkOverlap: 150
-    });
 
-    // Process the PDF
-    await processor.processDocuments();
-
-    console.log('\n🔍 === SEARCH EXAMPLES ===\n');
-
-    // Example 1: Basic searches
-    console.log('1️⃣ Basic Searches:');
-    const basicQueries = [
-      "When did I join Hubtel",
-      "What are my soft skills",
-      "Which school did I attend"
-    ];
-
-    const basicResults = await processor.batchSearch(basicQueries);
-    for (const [query, results] of Object.entries(basicResults)) {
-      console.log(`\n📋 Query: "${query}"`);
-      console.log(`📄 Top Result: ${results[0]?.pageContent.substring(0, 200)}...`);
-    }
-
-    // Example 2: Template-based searches
-    console.log('\n2️⃣ Template-based Searches:');
-    
-    const experienceResult = await processor.searchByTemplate('experience', 'jobHistory', { company: 'Hubtel' });
-    console.log(`\n📋 Job History Template:`);
-    console.log(`📄 Result: ${experienceResult[0]?.pageContent.substring(0, 200)}...`);
-
-    const skillsResult = await processor.searchByTemplate('skills', 'technical');
-    console.log(`\n📋 Technical Skills Template:`);
-    console.log(`📄 Result: ${skillsResult[0]?.pageContent.substring(0, 200)}...`);
-
-    // Example 3: Search with scores
-    console.log('\n3️⃣ Search with Similarity Scores:');
-    const scoredResults = await processor.searchWithScore("programming experience", 2);
-    scoredResults.forEach(([doc, score], index) => {
-      console.log(`\n📊 Result ${index + 1} (Score: ${score.toFixed(4)}):`);
-      console.log(`📄 Content: ${doc.pageContent.substring(0, 150)}...`);
-    });
-
-    // Example 4: Display statistics
-    console.log('\n📊 === DOCUMENT STATISTICS ===');
-    const stats = processor.getStats();
-    console.log(`📄 Total Pages: ${stats.totalPages}`);
-    console.log(`📝 Chunk Size: ${stats.config.chunkSize}`);
-    console.log(`🔄 Chunk Overlap: ${stats.config.chunkOverlap}`);
-    console.log(`🤖 Embedding Model: ${stats.config.embeddingModel}`);
-
-    // Example 5: Switching to a different PDF (commented out as file may not exist)
-    /*
-    console.log('\n🔄 === SWITCHING PDF FILE ===');
-    await processor.changePDF('AnotherResume.pdf');
-    const newResults = await processor.search("experience");
-    console.log('Results from new PDF:', newResults[0]?.pageContent.substring(0, 100));
-    */
-
-  } catch (error) {
-    console.error('❌ Error in examples:', error);
-  }
-}
 
 // Custom query builder helper
 class QueryBuilder {
@@ -369,10 +381,5 @@ export {
   PDFProcessorConfig,
   defaultConfig,
   queryTemplates, 
-  runExamples 
 };
 
-// Run examples if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runExamples();
-}

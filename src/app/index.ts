@@ -1,4 +1,4 @@
-import {CustomPDFProcessor,PDFProcessorConfig,defaultConfig, runExamples} from './utils.js';
+import {CustomPDFProcessor,PDFProcessorConfig,defaultConfig} from './utils.js';
 
 async function main() {
   // Create an instance of the PDF processor with default configuration
@@ -32,14 +32,19 @@ async function main() {
       "Which is my education background",
     ];
 
-    const basicResults = await customPdfProcessor.batchSearch(basicQueries);
-    for (const [query, results] of Object.entries(basicResults)) {
-      console.log(`\n📋 Query: "${query}"`);
-      console.log(`📄 Top Result: ${results[0]?.pageContent}...`);
+    const { results: basicResults, metadata } = await customPdfProcessor.batchSearchAdvanced(basicQueries);
+
+    for (const [query, documents] of Object.entries(basicResults)) {
+    console.log(`\n📋 Query: "${query}"`);
+        if (documents.length > 0) {
+            console.log(`📄 Top Result: ${documents[0].pageContent.substring(0, 200)}...`);
+            console.log(`📊 Found ${documents.length} total results`);
+        } else {
+            console.log(`❌ No results found`);
+        }
     }
 
     await customPdfProcessor.changePDF('How-To-Buy-Sell-Shares-GSE.pdf',null);
-    const embedder = await customPdfProcessor.getEmbeddings();
 
     const queries:string[]=[
         "How can i buy shares on the GSE?",
@@ -47,7 +52,7 @@ async function main() {
         "WHY DO WE NEED A STOCK EXCHANGE?"
     ];
 
-   await customPdfProcessor.processQueriesWithDetailedLogging(queries);
+   await customPdfProcessor.processEmbeddedQueriesWithDetailedLogging(queries);
 
 
   } catch (error) {
