@@ -38,15 +38,16 @@ async function main() {
       console.log(`📄 Top Result: ${results[0]?.pageContent}...`);
     }
 
-     await customPdfProcessor.changePDF('How-To-Buy-Sell-Shares-GSE.pdf',null);
+    await customPdfProcessor.changePDF('How-To-Buy-Sell-Shares-GSE.pdf',null);
+    const embedder = await customPdfProcessor.getEmbeddings();
 
-    const searchResults = await customPdfProcessor.search("How can i buy shares on the GSE?");
+    const queries:string[]=[
+        "How can i buy shares on the GSE?",
+        "WHAT IS A STOCK EXCHANGE?",
+        "WHY DO WE NEED A STOCK EXCHANGE?"
+    ];
 
-    console.log('\n🔍 === How to buy shares on Ghana Stock Exchange ===\n');
-    console.log('Top Results :');
-    for (const result of searchResults) {
-      console.log(`📄 ${result.pageContent}`);
-    }
+   await customPdfProcessor.processQueriesWithDetailedLogging(queries);
 
 
   } catch (error) {

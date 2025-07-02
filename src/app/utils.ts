@@ -96,6 +96,12 @@ class CustomPDFProcessor {
     }
   }
 
+  async getEmbeddings(): Promise<MistralAIEmbeddings>{
+   return new MistralAIEmbeddings({
+        model: this.config.embeddingModel
+      });
+  }
+
   // Process documents with customizable splitting
   async processDocuments(): Promise<void> {
     try {
@@ -135,6 +141,15 @@ class CustomPDFProcessor {
     return await this.vectorStore.similaritySearchWithScore(query, k);
   }
 
+  // Search with similarity scores
+  async searchWithVectorsWithScore(query: number[], k: number = 3): Promise<Array<[Document, number]>> {
+    if (!this.vectorStore) {
+      throw new Error('Vector store not initialized. Call processDocuments() first.');
+    }
+
+    return await this.vectorStore.similaritySearchVectorWithScore(query, k);
+  }
+
   // Simple search without scores
   async search(query: string, k: number = 3): Promise<Document[]> {
     if (!this.vectorStore) {
@@ -170,6 +185,73 @@ class CustomPDFProcessor {
 
     return await this.search(query);
   }
+
+  async  processQueriesWithDetailedLogging(queries:string[]) {
+    console.log('🔄 Starting query processing with embeddings...');
+    const startTime = Date.now();
+    
+    const embedder = await this.getEmbeddings();
+
+    try {
+        // Generate embeddings
+        console.log(`📊 Generating embeddings for ${queries.length} queries...`);
+        const embeddings = await embedder.embedDocuments(queries);
+        console.log(`✅ Embeddings generated (${embeddings[0]?.length} dimensions)`);
+        
+        const allResults = [];
+        
+        // Process each query
+        for (let i = 0; i < queries.length; i++) {
+            const query = queries[i];
+            const embedding = embeddings[i];
+            
+            console.log(`\n${'🔍'.repeat(20)}`);
+            console.log(`Query ${i + 1}/${queries.length}: "${query}"`);
+            console.log(`${'📄'.repeat(20)}`);
+            
+            const queryStartTime = Date.now();
+            const searchResults = await this.searchWithVectorsWithScore(embedding);
+            const queryEndTime = Date.now();
+            
+            console.log(`⏱️  Search completed in ${queryEndTime - queryStartTime}ms`);
+            console.log(`📈 Found ${searchResults.length} results`);
+            
+            if (searchResults.length > 0) {
+                console.log(`🎯 Best match score: ${searchResults[0][1].toFixed(4)}`);
+                console.log(`📉 Worst match score: ${searchResults[searchResults.length - 1][1].toFixed(4)}`);
+            }
+            
+            // Display top results
+            searchResults.slice(0, 3).forEach((result, resultIndex) => {
+                console.log(`\n📄 Result ${resultIndex + 1}:`);
+                console.log(`   📊 Score: ${result[1].toFixed(4)}`);
+                console.log(`   📝 Preview: ${result[0].pageContent.substring(0, 120)}...`);
+                if (result[0].metadata?.source) {
+                    console.log(`   📚 Source: ${result[0].metadata.source}`);
+                }
+            });
+            
+            allResults.push({
+                query,
+                resultCount: searchResults.length,
+                bestScore: searchResults[0]?.[1] || 0,
+                searchTime: queryEndTime - queryStartTime
+            });
+        }
+        
+        // Summary statistics
+        const totalTime = Date.now() - startTime;
+        console.log(`\n${'📊'.repeat(20)}`);
+        console.log('PROCESSING SUMMARY');
+        console.log(`${'📊'.repeat(20)}`);
+        console.log(`⏱️  Total processing time: ${totalTime}ms`);
+        console.log(`📈 Average results per query: ${(allResults.reduce((sum, r) => sum + r.resultCount, 0) / allResults.length).toFixed(1)}`);
+        console.log(`🎯 Average best score: ${(allResults.reduce((sum, r) => sum + r.bestScore, 0) / allResults.length).toFixed(4)}`);
+        
+    } catch (error) {
+        console.error('❌ Error in detailed processing:', error);
+    }
+}
 
   // Get document statistics
   getStats(): { totalPages: number; totalChunks: number; config: PDFProcessorConfig } {
