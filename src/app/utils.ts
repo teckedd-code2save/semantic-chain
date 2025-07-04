@@ -97,7 +97,7 @@ class CustomPDFProcessor {
     }
   }
 
-  async getEmbeddings(): Promise<MistralAIEmbeddings>{
+  async getEmbeddingsGenerator(): Promise<MistralAIEmbeddings>{
    return new MistralAIEmbeddings({
         model: this.config.embeddingModel
       });
@@ -119,11 +119,9 @@ class CustomPDFProcessor {
       console.log(`📝 Created ${allSplits.length} document chunks`);
 
       // Create embeddings and vector store
-      const embeddings = new MistralAIEmbeddings({
-        model: this.config.embeddingModel
-      });
+      const embeddingsGenerator = await this.getEmbeddingsGenerator();
+      this.vectorStore = new MemoryVectorStore(embeddingsGenerator);
 
-      this.vectorStore = new MemoryVectorStore(embeddings);
       await this.vectorStore.addDocuments(allSplits);
       console.log('🚀 Vector store created and populated');
 
@@ -134,7 +132,7 @@ class CustomPDFProcessor {
   }
 
   // Search with similarity scores
-  async searchWithScore(query: string, k: number = 3): Promise<Array<[Document, number]>> {
+  async searchWithScore(query: string, k: number = 3): Promise<[Document, number][]> {
     if (!this.vectorStore) {
       throw new Error('Vector store not initialized. Call processDocuments() first.');
     }
@@ -269,20 +267,20 @@ class CustomPDFProcessor {
     console.log('🔄 Starting query processing with embeddings...');
     const startTime = Date.now();
     
-    const embedder = await this.getEmbeddings();
+    const embedder = await this.getEmbeddingsGenerator();
 
     try {
         // Generate embeddings
         console.log(`📊 Generating embeddings for ${queries.length} queries...`);
-        const embeddings = await embedder.embedDocuments(queries);
-        console.log(`✅ Embeddings generated (${embeddings[0]?.length} dimensions)`);
+        const queryEmbeddings = await embedder.embedDocuments(queries);
+        console.log(`✅ Embeddings generated (${queryEmbeddings[0]?.length} dimensions)`);
         
         const allResults = [];
         
         // Process each query
         for (let i = 0; i < queries.length; i++) {
             const query = queries[i];
-            const embedding = embeddings[i];
+            const embedding = queryEmbeddings[i];
             
             console.log(`\n${'🔍'.repeat(5)}`);
             console.log(`Query ${i + 1}/${queries.length}: "${query}"`);
