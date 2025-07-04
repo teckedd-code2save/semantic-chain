@@ -10,10 +10,9 @@ async function main() {
      // Process the PDF
     await customPdfProcessor.processDocuments();
 
-    console.log('\n🔍 === SEARCH EXAMPLES ===\n');
+    console.log('\n🔍 === INSIGHTS ON MY RESUME ===\n');
 
     // Example 1: Basic searches
-    console.log('1️⃣ Basic Searches:');
     const basicQueries = [
       "When did I become a team lead at Hubtel",
       "What are my soft skills",
@@ -32,6 +31,8 @@ async function main() {
             console.log(`❌ No results found`);
         }
     }
+
+    console.log('\n🔍 === GHANA STOCK EXCHANGE ===\n');
 
     await customPdfProcessor.changePDF('How-To-Buy-Sell-Shares-GSE.pdf',null);
 
