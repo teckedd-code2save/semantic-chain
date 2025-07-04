@@ -2,22 +2,11 @@ import {CustomPDFProcessor,PDFProcessorConfig,defaultConfig} from './utils.js';
 
 async function main() {
   // Create an instance of the PDF processor with default configuration
-  const pdfProcessor = new CustomPDFProcessor(defaultConfig);
+  const customPdfProcessor = new CustomPDFProcessor(defaultConfig);
 
   try {
-    // Load and process PDF documents
-     //runExamples();
-
-    const newPdfConfig: PDFProcessorConfig = {
-      pdfFileName: "EdwardProffesionalExperience.pdf",
-      chunkSize: 500,
-      chunkOverlap: 100,
-      embeddingModel: "mistral-embed",
-      documentsPath: "../../src/assets/documents"
-    };
-
-    // Create a new instance with custom configuration
-    const customPdfProcessor = new CustomPDFProcessor(newPdfConfig);
+    
+    
      // Process the PDF
     await customPdfProcessor.processDocuments();
 
