@@ -5,10 +5,6 @@ import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 // Text splitter
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 
-// Path and URL utilities
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
 
 // Mistral AI embeddings
 import { MistralAIEmbeddings } from "@langchain/mistralai";
@@ -16,26 +12,23 @@ import { MistralAIEmbeddings } from "@langchain/mistralai";
 // In Memory vector store
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { VectorStoreRetriever } from '@langchain/core/vectorstores';
+import { DocumentLoaderConfig } from '../types';
+import { DocumentLoaderFactory } from '../loaders/DocumentLoaderFactory';
+import { PineconeStore } from '@langchain/pinecone';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Configuration interface for customizable settings
-interface PDFProcessorConfig {
-  pdfFileName: string;
+interface DocumentProcessorConfig {
   chunkSize: number;
   chunkOverlap: number;
   embeddingModel: string;
-  documentsPath: string;
 }
 
 // Default configuration
-const defaultConfig: PDFProcessorConfig = {
-  pdfFileName: 'EdwardProffesionalExperience.pdf',
+const defaultConfig: DocumentProcessorConfig = {
   chunkSize: 1000,
   chunkOverlap: 200,
   embeddingModel: 'mistral-embed',
-  documentsPath: '../../src/assets/documents'
 };
 
 // Predefined query templates for different types of searches
@@ -66,31 +59,29 @@ const queryTemplates = {
 };
 
 // Enhanced PDF loader class
-class CustomPDFProcessor {
-  private config: PDFProcessorConfig;
-  private vectorStore: MemoryVectorStore | null = null;
+class SemanticSearchProcessor {
+  private config: DocumentProcessorConfig;
+  private vectorStore: MemoryVectorStore |PineconeStore| null = null;
   private documents: Document[] = [];
+  private loderConfig: DocumentLoaderConfig;
 
-  constructor(config: Partial<PDFProcessorConfig> = {}) {
+  constructor(config: Partial<DocumentProcessorConfig> = {},
+    loaderConfig: DocumentLoaderConfig) {
     this.config = { ...defaultConfig, ...config };
+    this.loderConfig = loaderConfig;
   }
 
   // Load PDF documents with error handling
-  async loadPDFDocuments(): Promise<Document[]> {
+  async loadDocuments(): Promise<Document[]> {
     try {
-      const pdfPath = path.join(__dirname, this.config.documentsPath, this.config.pdfFileName);
       
-      // Check if file exists
-      if (!fs.existsSync(pdfPath)) {
-        throw new Error(`PDF file not found: ${pdfPath}`);
-      }
 
-      console.log(`📄 Loading PDF: ${this.config.pdfFileName}`);
-      const pdfLoader = new PDFLoader(pdfPath);
-      const pdfDocuments = await pdfLoader.load();
+      console.log(`📄 Loading file: ${this.loderConfig.fileConfig?.path}`);
+
+      const docs = await DocumentLoaderFactory.loadDocuments(this.loderConfig);
       
-      console.log(`✅ Successfully loaded ${pdfDocuments.length} pages`);
-      return pdfDocuments;
+      console.log(`✅ Successfully loaded ${docs.length} pages`);
+      return docs;
     } catch (error) {
       console.error('❌ Error loading PDF:', error);
       throw error;
@@ -103,11 +94,12 @@ class CustomPDFProcessor {
       });
   }
 
+  
   // Process documents with customizable splitting
   async processDocuments(): Promise<void> {
     try {
       // Load PDF documents
-      this.documents = await this.loadPDFDocuments();
+      this.documents = await this.loadDocuments();
       
       // Split documents into chunks
       const textSplitter = new RecursiveCharacterTextSplitter({
@@ -331,7 +323,7 @@ class CustomPDFProcessor {
 }
 
   // Get document statistics
-  getStats(): { totalPages: number; totalChunks: number; config: PDFProcessorConfig } {
+  getStats(): { totalPages: number; totalChunks: number; config: DocumentProcessorConfig } {
     return {
       totalPages: this.documents.length,
       totalChunks: this.vectorStore ? Object.keys(this.vectorStore).length : 0,
@@ -339,13 +331,7 @@ class CustomPDFProcessor {
     };
   }
 
-  // Change PDF file and reprocess
-  async changePDF(fileName: string,newConfig:PDFProcessorConfig|null): Promise<void> {
-    this.config.pdfFileName = fileName;
-    this.vectorStore = null;
-    this.documents = [];
-    await this.processDocuments();
-  }
+
 }
 
 
@@ -374,9 +360,9 @@ class QueryBuilder {
 
 // Export the processor and utilities
 export { 
-  CustomPDFProcessor, 
+  SemanticSearchProcessor, 
   QueryBuilder, 
-  PDFProcessorConfig,
+  DocumentProcessorConfig,
   defaultConfig,
   queryTemplates, 
 };

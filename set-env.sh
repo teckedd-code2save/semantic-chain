@@ -14,7 +14,10 @@ set +a
 
 # Verify environment variables are set
 echo "Environment variables set:"
+echo "OPENAI_API_KEY=$OPENAI_API_KEY"
 echo "MISTRAL_API_KEY=$MISTRAL_API_KEY"
+echo "PINECONE_API_KEY=$PINECONE_API_KEY"
+echo "PINECONE_INDEX=$PINECONE_INDEX"
 echo "LANGSMITH_TRACING=$LANGSMITH_TRACING"
 echo "LANGSMITH_API_KEY=$LANGSMITH_API_KEY"
 
